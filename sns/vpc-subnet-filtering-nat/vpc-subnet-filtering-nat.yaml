@@ -1,0 +1,478 @@
+Description: This template deploys a VPC with 3 subnets, a SNS EVA VM, two linux servers and the configuration 
+    to inspect inter-subnet traffic by using virtual networks and NAT.
+
+Parameters:
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation and /16) for this VPC
+    Type: String
+    Default: 10.192.0.0/16
+    
+  PublicSubnetCIDR:
+    Description: Please enter the IP range (CIDR notation and /24) for the public subnet
+    Type: String
+    Default: 10.192.0.0/24
+  
+  FrontendSubnetCIDR:
+    Description: Please enter the IP range (CIDR notation and /24) for the frontend subnet
+    Type: String
+    Default: 10.192.1.0/24
+
+  VirtualFrontendSubnet:
+    Description: Please enter the IP range (CIDR notation and /24) for the virtual frontend subnet
+    Type: String
+    Default: 10.193.1.0/24
+  
+  BackendSubnetCIDR:
+    Description: Please enter the IP range (CIDR notation and /24) for the backend subnet
+    Type: String
+    Default: 10.192.2.0/24
+
+  VirtualBackendSubnetCIDR:
+    Description: Please enter the IP range (CIDR notation and /24) for the virtual backend subnet
+    Type: String
+    Default: 10.193.2.0/24
+
+  SNSPublicIP:
+    Description: SNS EVA private IP address on the public subnet
+    Type: String
+    Default: 10.192.0.100
+
+  SNSFrontendIP:
+    Description: SNS EVA private IP address on the frontend subnet
+    Type: String
+    Default: 10.192.1.100
+
+  SNSBackendIP:
+    Description: SNS EVA private IP address on the backend subnet
+    Type: String
+    Default: 10.192.2.100
+
+  FrontendIP:
+    Description: Frontend server IP
+    Type: String
+    Default: 10.192.1.10
+
+  VirtualFrontendIP:
+    Description: Frontend virtual server IP
+    Type: String
+    Default: 10.193.1.10
+
+  BackendIP:
+    Description: Backend server IP
+    Type: String
+    Default: 10.192.2.10
+
+  VirtualBackendIP:
+    Description: Backend virtual server IP
+    Type: String
+    Default: 10.193.2.10
+
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.small
+    ConstraintDescription: must be a valid EC2 instance type.
+
+  KeyName:
+    Description: EC2 KeyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+
+Mappings: 
+  SNSRegionMap:
+    us-east-2:
+      HVM64: ami-06841c5924576befb
+    us-east-1:
+      HVM64: ami-068102521f8c9f636
+    us-west-1:
+      HVM64: ami-076795bf01184b2f3
+    us-west-2:
+      HVM64: ami-035d75b80caa772e6
+    ap-south-1:
+      HVM64: ami-0ffee94ea0f973c04
+    ap-northeast-2:
+      HVM64: ami-08b8a4f1963228981
+    ap-southeast-1:
+      HVM64: ami-0410c5b5dd7037d28
+    ap-southeast-2:
+      HVM64: ami-07668d4b7980b7e0e
+    ap-northeast-1:
+      HVM64: ami-0ee634648032d7cc5
+    ca-central-1:
+      HVM64: ami-0b5e5ca5e3cc054f9
+    eu-central-1:
+      HVM64: ami-09a6f5f3ff595f50c
+    eu-west-1:
+      HVM64: ami-0117e1673fa01826d
+    eu-west-2:
+      HVM64: ami-0b2582310970e9c27
+    eu-west-3:
+      HVM64: ami-08eae74a6879add20
+    eu-north-1:
+      HVM64: ami-4e0b8030
+    sa-east-1:
+      HVM64: ami-0896e3cd4876b0c8b
+  UbuntuRegionMap:
+    us-east-2:
+      HVM64: ami-0fc20dd1da406780b
+    us-east-1:
+      HVM64: ami-07ebfd5b3428b6f4d
+    us-west-1:
+      HVM64: ami-03ba3948f6c37a4b0
+    us-west-2:
+      HVM64: ami-0d1cd67c26f5fca19
+    ap-south-1:
+      HVM64: ami-0620d12a9cf777c87
+    ap-northeast-2:
+      HVM64: ami-0cd7b0de75f5a35d1
+    ap-southeast-1:
+      HVM64: ami-09a4a9ce71ff3f20b
+    ap-southeast-2:
+      HVM64: ami-02a599eb01e3b3c5b
+    ap-northeast-1:
+      HVM64: ami-07f4cb4629342979c
+    ca-central-1:
+      HVM64: ami-098dce2d49ef14294
+    eu-central-1:
+      HVM64: ami-0b418580298265d5c
+    eu-west-1:
+      HVM64: ami-035966e8adab4aaad
+    eu-west-2:
+      HVM64: ami-006a0174c6c25ac06
+    eu-west-3:
+      HVM64: ami-096b8af6e7e8fb927
+    eu-north-1:
+      HVM64: ami-0b7937aeb16a7eb94
+    sa-east-1:
+      HVM64: ami-05494b93950efa2fd
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-VPC" ]]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-IG" ]]
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnetCIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Public Subnet
+
+  FrontendSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref FrontendSubnetCIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Frontend Subnet
+
+  BackendSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref BackendSubnetCIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Backend Subnet
+
+
+  PassallSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Pass all sg
+      GroupDescription: "Security group with pass all rule"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: udp
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: -1
+        ToPort: -1
+        CidrIp: 0.0.0.0/0
+
+  IngressSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} ingress sg
+      GroupDescription: "Security group with ingress rule"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+
+  PublicAddress:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  AssociateControlPort:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt PublicAddress.AllocationId
+      NetworkInterfaceId: !Ref SNSPublicIf
+
+  SNSInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !FindInMap [SNSRegionMap, !Ref "AWS::Region", HVM64]
+      NetworkInterfaces:
+      - NetworkInterfaceId: !Ref SNSPublicIf
+        DeviceIndex: 0
+      - NetworkInterfaceId: !Ref SNSFrontendIf
+        DeviceIndex: 1
+      - NetworkInterfaceId: !Ref SNSBackendIf
+        DeviceIndex: 2
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-SNS" ]]
+      KeyName: !Ref KeyName
+
+  SNSPublicIf:
+    Type: AWS::EC2::NetworkInterface
+    Properties: 
+      Description: SNS Public ENI
+      PrivateIpAddress: !Ref SNSPublicIP
+      SourceDestCheck: true
+      SubnetId: !Ref PublicSubnet
+      GroupSet:
+      - !Ref IngressSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-public-eni" ]]
+
+  SNSFrontendIf:
+    Type: AWS::EC2::NetworkInterface
+    Properties: 
+      Description: SNS Frontend ENI
+      PrivateIpAddress: !Ref SNSFrontendIP
+      SourceDestCheck: false
+      SubnetId: !Ref FrontendSubnet
+      GroupSet:
+      - !Ref PassallSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-frontend-eni" ]]
+
+  SNSBackendIf:
+    Type: AWS::EC2::NetworkInterface
+    Properties: 
+      Description: SNS Backend ENI
+      PrivateIpAddress: !Ref SNSBackendIP
+      SourceDestCheck: false
+      SubnetId: !Ref BackendSubnet
+      GroupSet:
+      - !Ref PassallSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-backend-eni" ]]
+
+  FrontendInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !FindInMap [UbuntuRegionMap, !Ref "AWS::Region", HVM64]
+      PrivateIpAddress: !Ref FrontendIP
+      SubnetId: !Ref FrontendSubnet
+      SecurityGroupIds:
+      - !Ref PassallSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-WEB" ]]
+      KeyName: !Ref KeyName
+      UserData:
+        Fn::Base64: !Sub 
+          - |
+            #!/bin/sh
+            hostnamectl set-hostname web
+            while true; do
+              ping -w 5 -c 1 -n 8.8.8.8 && break
+              sleep 5
+            done
+            apt update
+            apt upgrade 
+            apt install -y apache2 php libapache2-mod-php php-mysql
+            rm /var/www/html/index.html
+            cat > /var/www/html/index.php <<EOPHP
+            <?php
+            \$conn = new mysqli("${db}", "web", "secret", "webdb");
+            if (\$conn->connect_error) { die("Connection failed: " . \$conn->connect_error); }
+            \$conn->query("UPDATE test SET value=value+1 WHERE variable='count'");
+            if(\$result = \$conn->query("SELECT value FROM test WHERE variable='count'")) {
+              \$count = \$result->fetch_row()[0];
+            } else {
+              \$count = "error";
+            }
+            ?>
+            <html><body><h1>Frontend App</h1><p>Count: <?= \$count ?></p></body></html>
+            EOPHP
+          - db: !Ref VirtualBackendIP
+
+  BackendInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !FindInMap [UbuntuRegionMap, !Ref "AWS::Region", HVM64]
+      PrivateIpAddress: !Ref BackendIP
+      SubnetId: !Ref BackendSubnet
+      SecurityGroupIds:
+      - !Ref PassallSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-DB" ]]
+      KeyName: !Ref KeyName
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/sh
+          hostnamectl set-hostname db
+          while true; do
+            ping -w 5 -c 1 -n 8.8.8.8 && break
+            sleep 5
+          done
+          echo "mysql-server mysql-server/root_password password secret" | debconf-set-selections
+          echo "mysql-server mysql-server/root_password_again password secret" | debconf-set-selections
+          apt update
+          apt upgrade
+          apt install -y mysql-server
+          sed -i 's/127.0.0.1/0.0.0.0/g' /etc/mysql/mysql.conf.d/mysqld.cnf
+          mysql --user=root --password=secret --execute="CREATE USER 'web'@'%' IDENTIFIED BY 'secret';"
+          mysql --user=root --password=secret --execute="CREATE DATABASE webdb CHARACTER SET utf8 COLLATE utf8_bin;"
+          mysql --user=root --password=secret --execute="GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,DROP,ALTER,INDEX on webdb.* TO 'web'@'%' IDENTIFIED BY 'secret';"
+          mysql --user=root --password=secret --execute="flush privileges;"
+          mysql --user=web --password=secret --database=webdb --execute="CREATE TABLE test(variable VARCHAR(20) NOT NULL, value INT(6) DEFAULT 0);"
+          mysql --user=web --password=secret --database=webdb --execute="INSERT INTO test VALUES('count', 0);"
+          /etc/init.d/mysql restart
+
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Public Routes
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet
+
+  FrontendRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Frontend Routes (AZ2)
+
+  DefaultFrontendRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref FrontendRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NetworkInterfaceId: !Ref SNSFrontendIf
+
+  FrontendSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref FrontendRouteTable
+      SubnetId: !Ref FrontendSubnet
+
+  BackendRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Backend Routes (AZ2)
+
+  DefaultBackendRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref BackendRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NetworkInterfaceId: !Ref SNSBackendIf
+
+  BackendSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref BackendRouteTable
+      SubnetId: !Ref BackendSubnet
+
+Outputs:
+  SNS:
+    Description: Public IP of SNS EVA
+    Value: !GetAtt SNSInstance.PublicIp
+  
+  Webamin:
+    Description: SNS EVA webadmin url
+    Value: !Sub
+      - https://${ip}/admin
+      - ip: !GetAtt SNSInstance.PublicIp
+  
+  App:
+    Description: Web app url
+    Value: !Sub
+      - http://${ip}/index.php
+      - ip: !GetAtt SNSInstance.PublicIp
+
+  Password:
+    Description: Initial password of SNS EVA
+    Value: !Ref SNSInstance
+  
