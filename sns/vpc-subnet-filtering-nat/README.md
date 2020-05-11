@@ -1,7 +1,7 @@
 
 # Inter-subnet traffic inspection in AWS VPC using NAT
 
-AWS route tables have a local route for the VPC network at the highest priority and this route can't be overloaded. Thus it is not directly possible to inspect with a SNS EVA the traffic from one subnet to another subnet.
+AWS route tables have a local route for the VPC network at the highest priority and this route can't be overloaded. Thus it is not  possible to inspect with a SNS EVA the traffic from one subnet to another subnet using the route tables.
 
 One solution is to use a virtual network addressing to force the inter-subnet traffic to use the default route of the VPC router and be analyzed by the SNS EVA VM. The SNS EVA do the address translation needed to recover the real IP addresses.
 

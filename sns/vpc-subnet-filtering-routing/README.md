@@ -3,7 +3,7 @@
 
 AWS route tables have a local route for the VPC network at the highest priority and this route can't be overloaded. Thus it is not directly possible to inspect with a SNS EVA the traffic from one subnet to another subnet.
 
-One solution is to change the network configuration of the servers in the subnets and replace the subnet router by the SNS ECA as the default gateway.
+One solution is to change the network configuration of the servers in the subnets and replace the subnet router by the SNS EVA as the default gateway.
 
 The CloudFormation template deploys a web application in the frontend subnet which connects to a database in the backend subnet. The network configurations are edited to use the SNS EVA interfaces in each subnet as default gateway.
 
