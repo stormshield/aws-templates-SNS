@@ -56,74 +56,77 @@ Parameters:
   KeyName:
     Description: EC2 KeyPair to enable SSH access to the instance
     Type: AWS::EC2::KeyPair::KeyName
+    AllowedPattern: ".+"
 
 Mappings: 
   SNSRegionMap:
-    us-east-2:
-      HVM64: ami-06841c5924576befb
-    us-east-1:
-      HVM64: ami-068102521f8c9f636
-    us-west-1:
-      HVM64: ami-076795bf01184b2f3
-    us-west-2:
-      HVM64: ami-035d75b80caa772e6
-    ap-south-1:
-      HVM64: ami-0ffee94ea0f973c04
-    ap-northeast-2:
-      HVM64: ami-08b8a4f1963228981
-    ap-southeast-1:
-      HVM64: ami-0410c5b5dd7037d28
-    ap-southeast-2:
-      HVM64: ami-07668d4b7980b7e0e
-    ap-northeast-1:
-      HVM64: ami-0ee634648032d7cc5
-    ca-central-1:
-      HVM64: ami-0b5e5ca5e3cc054f9
-    eu-central-1:
-      HVM64: ami-09a6f5f3ff595f50c
-    eu-west-1:
-      HVM64: ami-0117e1673fa01826d
-    eu-west-2:
-      HVM64: ami-0b2582310970e9c27
-    eu-west-3:
-      HVM64: ami-08eae74a6879add20
     eu-north-1:
-      HVM64: ami-4e0b8030
+      HVM64: ami-08aeef9fe1d74259b
+    ap-south-1:
+      HVM64: ami-01d8a977291428114
+    eu-west-3:
+      HVM64: ami-064ec7e70723023b2
+    eu-west-2:
+      HVM64: ami-0b04e97c833836e5e
+    eu-west-1:
+      HVM64: ami-07d0a7846d04d3e26
+    ap-northeast-2:
+      HVM64: ami-049a0e6ecc7f4bc6e
+    ap-northeast-1:
+      HVM64: ami-066aa94badb8b8090
     sa-east-1:
-      HVM64: ami-0896e3cd4876b0c8b
+      HVM64: ami-0b56acf955d5f7081
+    ca-central-1:
+      HVM64: ami-0597c4f5ae2b6cff9
+    ap-southeast-1:
+      HVM64: ami-065bc180cfe4d8b82
+    ap-southeast-2:
+      HVM64: ami-00bcf54263f55bcec
+    eu-central-1:
+      HVM64: ami-0f744584945a1238a
+    us-east-1:
+      HVM64: ami-0e18b1dbfa4099c25
+    us-east-2:
+      HVM64: ami-086ddf202c3b7ad1a
+    us-west-1:
+      HVM64: ami-090b725d1cd586551
+    us-west-2:
+      HVM64: ami-0cb1458327db9b0a3
   UbuntuRegionMap:
-    us-east-2:
-      HVM64: ami-0fc20dd1da406780b
-    us-east-1:
-      HVM64: ami-07ebfd5b3428b6f4d
-    us-west-1:
-      HVM64: ami-03ba3948f6c37a4b0
-    us-west-2:
-      HVM64: ami-0d1cd67c26f5fca19
-    ap-south-1:
-      HVM64: ami-0620d12a9cf777c87
-    ap-northeast-2:
-      HVM64: ami-0cd7b0de75f5a35d1
-    ap-southeast-1:
-      HVM64: ami-09a4a9ce71ff3f20b
-    ap-southeast-2:
-      HVM64: ami-02a599eb01e3b3c5b
-    ap-northeast-1:
-      HVM64: ami-07f4cb4629342979c
-    ca-central-1:
-      HVM64: ami-098dce2d49ef14294
-    eu-central-1:
-      HVM64: ami-0b418580298265d5c
-    eu-west-1:
-      HVM64: ami-035966e8adab4aaad
-    eu-west-2:
-      HVM64: ami-006a0174c6c25ac06
-    eu-west-3:
-      HVM64: ami-096b8af6e7e8fb927
     eu-north-1:
-      HVM64: ami-0b7937aeb16a7eb94
+      HVM64: ami-092cce4a19b438926
+    ap-south-1:
+      HVM64: ami-0851b76e8b1bce90b
+    eu-west-3:
+      HVM64: ami-0c6ebbd55ab05f070
+    eu-west-2:
+      HVM64: ami-0015a39e4b7c0966f
+    eu-west-1:
+      HVM64: ami-08ca3fed11864d6bb
+    ap-northeast-3:
+      HVM64: ami-096c4b6e0792d8c16
+    ap-northeast-2:
+      HVM64: ami-0454bb2fefc7de534
+    ap-northeast-1:
+      HVM64: ami-088da9557aae42f39
     sa-east-1:
-      HVM64: ami-05494b93950efa2fd
+      HVM64: ami-090006f29ecb2d79a
+    ca-central-1:
+      HVM64: ami-0aee2d0182c9054ac
+    ap-southeast-1:
+      HVM64: ami-055d15d9cfddf7bd3
+    ap-southeast-2:
+      HVM64: ami-0b7dcd6e6fd797935
+    eu-central-1:
+      HVM64: ami-0d527b8c289b4af7f
+    us-east-1:
+      HVM64: ami-04505e74c0741db8d
+    us-east-2:
+      HVM64: ami-0fb653ca2d3203ac1
+    us-west-1:
+      HVM64: ami-01f87c43e618bf8f0
+    us-west-2:
+      HVM64: ami-0892d3c7ee96c0bf7
 
 Resources:
   VPC:
@@ -254,6 +257,32 @@ Resources:
         - Key: Name
           Value: !Join ['', [!Ref "AWS::StackName", "-SNS" ]]
       KeyName: !Ref KeyName
+      UserData:
+        Fn::Base64: |
+          #!/bin/sh
+
+          ID=$(fetch -o - http://169.254.169.254/latest/meta-data/instance-id 2>/dev/null)
+
+          cat << EOSCRIPT | nsrpc admin:${ID}@127.0.0.1
+          CONFIG OBJECT HOST new name=frontend_web ip=10.192.1.10
+          CONFIG OBJECT HOST new name=backend_db ip=10.192.2.10
+          CONFIG OBJECT ACTIVATE
+          CONFIG NETWORK INTERFACE RENAME ifname=ethernet0 name=public
+          CONFIG NETWORK INTERFACE RENAME ifname=ethernet1 name=frontend
+          CONFIG NETWORK INTERFACE RENAME ifname=ethernet2 name=backend
+          CONFIG NETWORK INTERFACE ACTIVATE
+          CONFIG FILTER RULE INSERT type=filter index=8 state=on action=pass srctarget=any srcif=public dsttarget=Firewall_public dstport=ssh comment="SSH administration"
+          CONFIG FILTER RULE INSERT type=filter index=8 state=on action=pass srctarget=any srcif=public dsttarget=Firewall_public natdsttarget=frontend_web dstport=http comment="Web frontend redirect"
+          CONFIG FILTER RULE INSERT type=filter index=8 state=on action=pass srctarget=Network_backend,Network_frontend dsttarget=Internet dstport=any comment="Internet access"
+          CONFIG FILTER RULE INSERT type=filter index=8 state=on action=pass srctarget=Network_frontend dsttarget=Network_backend dstport=mysql comment="DB access"
+          CONFIG FILTER RULE INSERT type=nat index=8 state=on action=nat srctarget=Network_backend,Network_frontend dsttarget=Internet natsrctarget=Firewall_public natsrcport=ephemeral_fw
+          CONFIG FILTER ACTIVATE
+          CONFIG SLOT ACTIVATE type=filter slot=8
+          QUIT
+          EOSCRIPT
+
+          echo "user-data executed" > /log/userdata.log
+
 
   SNSPublicIf:
     Type: AWS::EC2::NetworkInterface
@@ -380,7 +409,7 @@ Resources:
             sed -i 's/127.0.0.1/0.0.0.0/g' /etc/mysql/mysql.conf.d/mysqld.cnf
             mysql --user=root --password=secret --execute="CREATE USER 'web'@'%' IDENTIFIED BY 'secret';"
             mysql --user=root --password=secret --execute="CREATE DATABASE webdb CHARACTER SET utf8 COLLATE utf8_bin;"
-            mysql --user=root --password=secret --execute="GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,DROP,ALTER,INDEX on webdb.* TO 'web'@'%' IDENTIFIED BY 'secret';"
+            mysql --user=root --password=secret --execute="GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,DROP,ALTER,INDEX on webdb.* TO 'web'@'%';"
             mysql --user=root --password=secret --execute="flush privileges;"
             mysql --user=web --password=secret --database=webdb --execute="CREATE TABLE test(variable VARCHAR(20) NOT NULL, value INT(6) DEFAULT 0);"
             mysql --user=web --password=secret --database=webdb --execute="INSERT INTO test VALUES('count', 0);"

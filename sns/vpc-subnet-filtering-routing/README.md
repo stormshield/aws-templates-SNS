@@ -25,7 +25,7 @@ The filtering and nat configuration of the SNS EVA:
 
 ![Output](img/output.png)
 
-- Logon using the instance ID as default password and restore the provided backup file (sns-routing.na). 
+- Logon using the instance ID as default password.
 
 - The web and database applications will then be deployed on the Ubuntu servers. A few moment later the web app will be available (see the output tab for the url). Hit the web app page a few times.
 
