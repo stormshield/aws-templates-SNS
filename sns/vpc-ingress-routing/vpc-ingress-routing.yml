@@ -1,0 +1,419 @@
+Description: This template deploys a VPC with 2 subnets, one SNS EVA VM, one linux server and the configuration to route ingress traffic to the linux server through the SNS EVA for inspection.
+
+Parameters:
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation and /16) for this VPC
+    Type: String
+    Default: 10.192.0.0/16
+    
+  PublicSubnetCIDR:
+    Description: Please enter the IP range (CIDR notation and /24) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.192.0.0/24
+   
+  PrivateSubnetCIDR:
+    Description: Please enter the IP range (CIDR notation and /24) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.192.1.0/24
+
+  SNSPublicIP:
+    Description: SNS EVA private IP address on the public subnet
+    Type: String
+    Default: 10.192.0.100
+
+  SNSPrivateIP:
+    Description: SNS EVA private IP address on the private subnet
+    Type: String
+    Default: 10.192.1.100
+
+  LinuxPrivateIP:
+    Description: Web server private IP
+    Type: String
+    Default: 10.192.1.10
+
+
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.small
+    ConstraintDescription: must be a valid EC2 instance type.
+
+  KeyName:
+    Description: EC2 KeyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    AllowedPattern: ".+"
+
+Mappings: 
+  SNSRegionMap:
+    eu-north-1:
+      HVM64: ami-08aeef9fe1d74259b
+    ap-south-1:
+      HVM64: ami-01d8a977291428114
+    eu-west-3:
+      HVM64: ami-064ec7e70723023b2
+    eu-west-2:
+      HVM64: ami-0b04e97c833836e5e
+    eu-west-1:
+      HVM64: ami-07d0a7846d04d3e26
+    ap-northeast-2:
+      HVM64: ami-049a0e6ecc7f4bc6e
+    ap-northeast-1:
+      HVM64: ami-066aa94badb8b8090
+    sa-east-1:
+      HVM64: ami-0b56acf955d5f7081
+    ca-central-1:
+      HVM64: ami-0597c4f5ae2b6cff9
+    ap-southeast-1:
+      HVM64: ami-065bc180cfe4d8b82
+    ap-southeast-2:
+      HVM64: ami-00bcf54263f55bcec
+    eu-central-1:
+      HVM64: ami-0f744584945a1238a
+    us-east-1:
+      HVM64: ami-0e18b1dbfa4099c25
+    us-east-2:
+      HVM64: ami-086ddf202c3b7ad1a
+    us-west-1:
+      HVM64: ami-090b725d1cd586551
+    us-west-2:
+      HVM64: ami-0cb1458327db9b0a3
+  UbuntuRegionMap:
+    eu-north-1:
+      HVM64: ami-092cce4a19b438926
+    ap-south-1:
+      HVM64: ami-0851b76e8b1bce90b
+    eu-west-3:
+      HVM64: ami-0c6ebbd55ab05f070
+    eu-west-2:
+      HVM64: ami-0015a39e4b7c0966f
+    eu-west-1:
+      HVM64: ami-08ca3fed11864d6bb
+    ap-northeast-3:
+      HVM64: ami-096c4b6e0792d8c16
+    ap-northeast-2:
+      HVM64: ami-0454bb2fefc7de534
+    ap-northeast-1:
+      HVM64: ami-088da9557aae42f39
+    sa-east-1:
+      HVM64: ami-090006f29ecb2d79a
+    ca-central-1:
+      HVM64: ami-0aee2d0182c9054ac
+    ap-southeast-1:
+      HVM64: ami-055d15d9cfddf7bd3
+    ap-southeast-2:
+      HVM64: ami-0b7dcd6e6fd797935
+    eu-central-1:
+      HVM64: ami-0d527b8c289b4af7f
+    us-east-1:
+      HVM64: ami-04505e74c0741db8d
+    us-east-2:
+      HVM64: ami-0fb653ca2d3203ac1
+    us-west-1:
+      HVM64: ami-01f87c43e618bf8f0
+    us-west-2:
+      HVM64: ami-0892d3c7ee96c0bf7
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-VPC" ]]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-IG" ]]
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnetCIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Public Subnet
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PrivateSubnetCIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Private Subnet
+
+  PassallSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Pass all sg
+      GroupDescription: "Security group with pass all rule"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: udp
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: -1
+        ToPort: -1
+        CidrIp: 0.0.0.0/0
+
+  IngressSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} ingress sg
+      GroupDescription: "Security group with ingress rule"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+
+  SNSEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  AssociateControlPort:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt SNSEIP.AllocationId
+      NetworkInterfaceId: !Ref SNSPublicIf
+
+  SNSInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !FindInMap [SNSRegionMap, !Ref "AWS::Region", HVM64]
+      NetworkInterfaces:
+      - NetworkInterfaceId: !Ref SNSPublicIf
+        DeviceIndex: 0
+      - NetworkInterfaceId: !Ref SNSPrivateIf
+        DeviceIndex: 1
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-SNS" ]]
+      KeyName: !Ref KeyName
+      UserData:
+        Fn::Base64: !Sub 
+          - |
+            #!/bin/sh
+
+            ID=$(fetch -o - http://169.254.169.254/latest/meta-data/instance-id 2>/dev/null)
+
+            cat << EOSCRIPT | nsrpc admin:${!ID}@127.0.0.1
+            CONFIG OBJECT HOST new name=webserver ip=${webserver}     
+            CONFIG OBJECT ACTIVATE
+            CONFIG FILTER RULE INSERT type=filter index=8 state=on action=pass srctarget=any srcif=out dsttarget=Firewall_out dstport=ssh comment="SSH administration"
+            CONFIG FILTER RULE INSERT type=filter index=8 state=on action=pass srctarget=any srcif=out dsttarget=webserver dstport=http comment="Web server"
+            CONFIG FILTER RULE INSERT type=filter index=8 state=on action=pass srctarget=Network_in dsttarget=any dstport=any comment="Private to Internet"          
+            CONFIG FILTER RULE INSERT type=nat index=8 state=on action=nat srctarget=Network_in dsttarget=Internet natsrctarget=Firewall_out natsrcport=ephemeral_fw
+            CONFIG FILTER ACTIVATE
+            CONFIG SLOT ACTIVATE type=filter slot=8
+            CONFIG LOG Connection state=1
+            CONFIG LOG Plugin state=1
+            CONFIG LOG ACTIVATE
+            QUIT
+            EOSCRIPT
+            
+            echo "user-data script executed" > /log/userdata.log
+          - webserver: !Ref LinuxPrivateIP
+
+
+  SNSPublicIf:
+    Type: AWS::EC2::NetworkInterface
+    Properties: 
+      Description: SNS Public ENI
+      PrivateIpAddress: !Ref SNSPublicIP
+      SourceDestCheck: false
+      SubnetId: !Ref PublicSubnet
+      GroupSet:
+      - !Ref IngressSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-public-eni" ]]
+
+  SNSPrivateIf:
+    Type: AWS::EC2::NetworkInterface
+    Properties: 
+      Description: SNS Private ENI
+      PrivateIpAddress: !Ref SNSPrivateIP
+      SourceDestCheck: false
+      SubnetId: !Ref PrivateSubnet
+      GroupSet:
+      - !Ref PassallSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-private-eni" ]]
+
+  LinuxEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  WebAssociateControlPort:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt LinuxEIP.AllocationId
+      InstanceId: !Ref LinuxInstance
+      
+  LinuxInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !FindInMap [UbuntuRegionMap, !Ref "AWS::Region", HVM64]
+      PrivateIpAddress: !Ref LinuxPrivateIP
+      SubnetId: !Ref PrivateSubnet
+      SecurityGroupIds:
+      - !Ref PassallSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Join ['', [!Ref "AWS::StackName", "-WEB" ]]
+      KeyName: !Ref KeyName
+      UserData:
+        Fn::Base64: |
+          #!/bin/sh
+          hostnamectl set-hostname web
+          while true; do
+            ping -w 5 -c 1 -n 8.8.8.8 && break
+            sleep 5
+          done
+          apt update
+          apt upgrade 
+          apt install -y apache2
+          cat > /var/www/html/index.html <<EOHTML
+          <html>
+           <body>
+            <h3>Web server</h3>
+           </body>
+          </html>
+          EOHTML
+
+
+  IngressRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Ingress route table
+
+  IngressRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref IngressRouteTable
+      DestinationCidrBlock: !Ref PrivateSubnetCIDR
+      NetworkInterfaceId: !Ref SNSPublicIf
+
+  IngressRouteTableAssociation:
+    Type: AWS::EC2::GatewayRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref IngressRouteTable
+      GatewayId: !Ref InternetGateway
+
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Public route table
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet
+
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Public route table
+
+  PrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: SNSPrivateIf
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NetworkInterfaceId: !Ref SNSPrivateIf
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet
+
+
+Outputs:
+  SNSIP:
+    Description: SNS EVA public IP
+    Value: !GetAtt SNSInstance.PublicIp
+  
+  WebServerIP:
+    Description: Web server public IP
+    Value: !GetAtt LinuxInstance.PublicIp
+
+  Webadmin:
+    Description: SNS EVA webadmin url
+    Value: !Sub
+      - https://${ip}/admin
+      - ip: !GetAtt SNSInstance.PublicIp
+  
+  WebServer:
+    Description: Web url
+    Value: !Sub
+      - http://${ip}/index.html
+      - ip: !GetAtt LinuxInstance.PublicIp
+
+  Password:
+    Description: SNS EVA temporary password
+    Value: !Ref SNSInstance
+  

@@ -5,3 +5,4 @@ This repository contains AWS CloudFormation templates to deploy SNS EVA virtual 
 * VPC inter-subnet filtering
     - Using routing
     - Using NAT
+* VPC ingress routing
